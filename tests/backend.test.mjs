@@ -69,3 +69,19 @@ test('OpenRouter request headers are valid ByteStrings (no Cyrillic in headers)'
     assert.ok(seen.get('authorization'));
   } finally { globalThis.fetch = original; }
 });
+
+test('model output wrapped in a ```json fence is still parsed', async () => {
+  const {complete} = await import('../backend/analysis.mjs');
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({choices:[{finish_reason:'stop',message:{content:'```json\n{"findings":[]}\n```'}}]});
+  try { assert.deepEqual(await complete([{id:'S1',url:null,title:'t',text:'x'.repeat(200)}], {OPENROUTER_API_KEY:'k'}), {findings:[]}); }
+  finally { globalThis.fetch = original; }
+});
+
+test('truncated model output is rejected with a logged diagnostic', async () => {
+  const {complete} = await import('../backend/analysis.mjs');
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({choices:[{finish_reason:'length',message:{content:'{"find'}}],usage:{completion_tokens:8000}});
+  try { await assert.rejects(complete([{id:'S1',url:null,title:'t',text:'x'.repeat(200)}], {OPENROUTER_API_KEY:'k'}), e => e.code==='INVALID_MODEL_OUTPUT' && /finish_reason=length/.test(e.detail)); }
+  finally { globalThis.fetch = original; }
+});
