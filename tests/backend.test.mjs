@@ -57,3 +57,15 @@ test('unreadable source never calls model or invents results',async()=>{let call
 test('OpenRouter HTTP contract and output error handling',async(t)=>{
   t.mock.method(globalThis,'fetch',async(url,opts)=>{assert.equal(url,'https://openrouter.ai/api/v1/chat/completions');assert.equal(opts.headers.Authorization,'Bearer test-key');const p=JSON.parse(opts.body);assert.equal(p.model,MODEL);assert.ok(p.messages[1].content.includes(source.text));return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({findings:[valid]})}}]});});assert.deepEqual(await complete([source],env),{findings:[valid]});
 });
+
+test('OpenRouter request headers are valid ByteStrings (no Cyrillic in headers)', async () => {
+  const {complete} = await import('../backend/analysis.mjs');
+  const original = globalThis.fetch;
+  let seen;
+  globalThis.fetch = async (url, init) => { seen = new Headers(init.headers); return Response.json({choices:[{finish_reason:'stop',message:{content:'{"findings":[]}'}}]}); };
+  try {
+    const out = await complete([{id:'S1',url:null,title:'t',text:'x'.repeat(200)}], {OPENROUTER_API_KEY:'k'});
+    assert.deepEqual(out, {findings:[]});
+    assert.ok(seen.get('authorization'));
+  } finally { globalThis.fetch = original; }
+});

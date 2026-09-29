@@ -14,7 +14,7 @@ export function validateInput(body) {
   throw new PublicError('Вставьте текст условий: от 100 до 20 000 символов.');
 }
 export async function complete(sources,env,{signal}={}) {
-  const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',signal,headers:{'Authorization':`Bearer ${env.OPENROUTER_API_KEY}`,'Content-Type':'application/json','HTTP-Referer':'https://k1o0n.me','X-OpenRouter-Title':'Вернуть доверие'},body:JSON.stringify({model:env.OPENROUTER_MODEL||MODEL,messages:[{role:'system',content:prompt},{role:'user',content:JSON.stringify({country:'Россия',untrusted_sources:sources})}],response_format:{type:'json_object'},temperature:0.1,max_tokens:2200,reasoning:{effort:'low'}})});
+  const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',signal,headers:{'Authorization':`Bearer ${env.OPENROUTER_API_KEY}`,'Content-Type':'application/json','HTTP-Referer':'https://k1o0n.me','X-OpenRouter-Title':'Vernut doverie (k1o0n.me)'},body:JSON.stringify({model:env.OPENROUTER_MODEL||MODEL,messages:[{role:'system',content:prompt},{role:'user',content:JSON.stringify({country:'Россия',untrusted_sources:sources})}],response_format:{type:'json_object'},temperature:0.1,max_tokens:2200,reasoning:{effort:'low'}})});
   if(!response.ok) {await response.body?.cancel();throw new PublicError(response.status===429?'Сервис анализа перегружен. Попробуйте позже.':'Сервис анализа временно недоступен. Попробуйте позже.',503,'MODEL_UNAVAILABLE');}
   const data=await response.json();const message=data.choices?.[0];
   if(message?.finish_reason!=='stop'||typeof message.message?.content!=='string')throw new PublicError('Не удалось получить полный ответ. Попробуйте ещё раз.',502,'INVALID_MODEL_OUTPUT');
