@@ -1,0 +1,24 @@
+{
+    "projectId": "6abb88f6002fbbdbb4c0",
+    "projectName": "trust-proj",
+    "endpoint": "https://fra.cloud.appwrite.io/v1",
+    "functions": [
+        {
+            "$id": "trust-analysis",
+            "name": "trust-analysis",
+            "runtime": "node-22",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "scopes": [],
+            "schedule": "",
+            "timeout": 180,
+            "enabled": true,
+            "logging": true,
+            "entrypoint": "appwrite.mjs",
+            "commands": "npm install --omit=dev",
+            "path": "backend"
+        }
+    ]
+}

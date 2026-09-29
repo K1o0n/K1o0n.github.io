@@ -1,0 +1,5 @@
+{
+  "name": "trust-before-payment", "private": true, "type": "module",
+  "scripts": {"start": "node --env-file-if-exists=.env scripts/dev.mjs", "test": "node --test tests/*.test.mjs", "build": "node scripts/build.mjs"},
+  "engines": {"node": ">=22"}
+}
