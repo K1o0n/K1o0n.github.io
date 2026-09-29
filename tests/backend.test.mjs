@@ -85,3 +85,20 @@ test('truncated model output is rejected with a logged diagnostic', async () => 
   try { await assert.rejects(complete([{id:'S1',url:null,title:'t',text:'x'.repeat(200)}], {OPENROUTER_API_KEY:'k'}), e => e.code==='INVALID_MODEL_OUTPUT' && /finish_reason=length/.test(e.detail)); }
   finally { globalThis.fetch = original; }
 });
+
+test('model call disables reasoning, and retries with low effort if the model requires it', async () => {
+  const {complete} = await import('../backend/analysis.mjs');
+  const original = globalThis.fetch;
+  const bodies = [];
+  globalThis.fetch = async (url, init) => {
+    bodies.push(JSON.parse(init.body));
+    if (bodies.length === 1) return new Response('{"error":{"message":"Reasoning is mandatory for this endpoint"}}', {status:400});
+    return Response.json({choices:[{finish_reason:'stop',message:{content:'{"findings":[]}'}}]});
+  };
+  try {
+    assert.deepEqual(await complete([{id:'S1',url:null,title:'t',text:'x'.repeat(200)}], {OPENROUTER_API_KEY:'k'}), {findings:[]});
+    assert.deepEqual(bodies[0].reasoning, {enabled:false});
+    assert.deepEqual(bodies[1].reasoning, {effort:'low'});
+    assert.equal(bodies.length, 2);
+  } finally { globalThis.fetch = original; }
+});

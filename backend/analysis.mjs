@@ -14,8 +14,11 @@ export function validateInput(body) {
   throw new PublicError('Вставьте текст условий: от 100 до 20 000 символов.');
 }
 export async function complete(sources,env,{signal}={}) {
-  const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',signal,headers:{'Authorization':`Bearer ${env.OPENROUTER_API_KEY}`,'Content-Type':'application/json','HTTP-Referer':'https://k1o0n.me','X-OpenRouter-Title':'Vernut doverie (k1o0n.me)'},body:JSON.stringify({model:env.OPENROUTER_MODEL||MODEL,messages:[{role:'system',content:prompt},{role:'user',content:JSON.stringify({country:'Россия',untrusted_sources:sources})}],response_format:{type:'json_object'},temperature:0.1,max_tokens:8000,reasoning:{effort:'low'}})});
-  if(!response.ok) {await response.body?.cancel();throw new PublicError(response.status===429?'Сервис анализа перегружен. Попробуйте позже.':'Сервис анализа временно недоступен. Попробуйте позже.',503,'MODEL_UNAVAILABLE');}
+  const request=reasoning=>fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',signal,headers:{'Authorization':`Bearer ${env.OPENROUTER_API_KEY}`,'Content-Type':'application/json','HTTP-Referer':'https://k1o0n.me','X-OpenRouter-Title':'Vernut doverie (k1o0n.me)'},body:JSON.stringify({model:env.OPENROUTER_MODEL||MODEL,messages:[{role:'system',content:prompt},{role:'user',content:JSON.stringify({country:'Россия',untrusted_sources:sources})}],response_format:{type:'json_object'},temperature:0.1,max_tokens:4000,reasoning,provider:{sort:'throughput'}})});
+  // Appwrite cuts synchronous HTTP executions at ~60 s, so reasoning is off by default.
+  let response=await request({enabled:false});
+  if(response.status===400){const text=await response.text();if(/reason/i.test(text))response=await request({effort:'low'});else{const e=new PublicError('Сервис анализа временно недоступен. Попробуйте позже.',503,'MODEL_UNAVAILABLE');e.detail=`status=400 body=${text.slice(0,300)}`;throw e;}}
+  if(!response.ok) {const text=await response.text().catch(()=>'');const e=new PublicError(response.status===429?'Сервис анализа перегружен. Попробуйте позже.':'Сервис анализа временно недоступен. Попробуйте позже.',503,'MODEL_UNAVAILABLE');e.detail=`status=${response.status} body=${text.slice(0,300)}`;throw e;}
   const data=await response.json();const message=data.choices?.[0];
   if(message?.finish_reason!=='stop'||typeof message.message?.content!=='string'||!message.message.content.trim()){const e=new PublicError('Не удалось получить полный ответ. Попробуйте ещё раз.',502,'INVALID_MODEL_OUTPUT');e.detail=`finish_reason=${message?.finish_reason} native=${message?.native_finish_reason} content=${typeof message?.message?.content}:${String(message?.message?.content??'').length} usage=${JSON.stringify(data.usage||{})} error=${JSON.stringify(data.error||message?.error||null)}`;throw e;}
   const content=message.message.content.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
@@ -67,8 +70,9 @@ export function createHandler({collect=collectSources,model=complete,now=Date.no
       if(active>=3)return respond({error:'Сейчас идёт несколько проверок. Повторите чуть позже.'},429,{'Retry-After':'20'});
       active++;
       try {
-        const collection=await collect(input,{signal:AbortSignal.any([request.signal,AbortSignal.timeout(25000)])});
-        const raw=await model(collection.sources,env,{signal:AbortSignal.any([request.signal,AbortSignal.timeout(90000)])});
+        const deadline=now()+55000;
+        const collection=await collect(input,{signal:AbortSignal.any([request.signal,AbortSignal.timeout(15000)])});
+        const raw=await model(collection.sources,env,{signal:AbortSignal.any([request.signal,AbortSignal.timeout(Math.max(5000,deadline-now()))])});
         const result=groundResult(raw,collection.sources);
         return respond({...result,mode:input.mode,checkedAt:new Date(now()).toISOString(),model:env.OPENROUTER_MODEL||MODEL,sources:collection.sources.map(({text,...source})=>source),warnings:[...collection.warnings,...(result.rejected?['Часть выводов не прошла проверку цитат и отмечена как «Нет данных».']:[]),'Оценка касается только прочитанных условий. Она не подтверждает надёжность продавца и не гарантирует возврат денег.']});
       } finally {active--;}
