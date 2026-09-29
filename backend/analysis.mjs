@@ -37,7 +37,7 @@ export function groundResult(raw,sources) {
 }
 export function createHandler({collect=collectSources,model=complete,now=Date.now}={}) {
   const buckets=new Map();let active=0;
-  return async function handle(request,env={},clientId='local') {
+  return async function handle(request,env={},clientId='local',report=console.error) {
     const origin=request.headers.get('origin')||'';
     const allowed=(env.ALLOWED_ORIGINS||'https://k1o0n.me,https://k1o0n.github.io').split(',').map(s=>s.trim());
     const cors=origin&&allowed.includes(origin)?{'Access-Control-Allow-Origin':origin,'Vary':'Origin'}:{};
@@ -71,6 +71,6 @@ export function createHandler({collect=collectSources,model=complete,now=Date.no
         const result=groundResult(raw,collection.sources);
         return respond({...result,mode:input.mode,checkedAt:new Date(now()).toISOString(),model:env.OPENROUTER_MODEL||MODEL,sources:collection.sources.map(({text,...source})=>source),warnings:[...collection.warnings,...(result.rejected?['Часть выводов не прошла проверку цитат и отмечена как «Нет данных».']:[]),'Оценка касается только прочитанных условий. Она не подтверждает надёжность продавца и не гарантирует возврат денег.']});
       } finally {active--;}
-    }catch(error){if(error instanceof PublicError)return respond({error:error.message,code:error.code},error.status);if(['TimeoutError','AbortError'].includes(error.name))return respond({error:'Проверка заняла слишком много времени. Попробуйте сократить текст или повторить позже.',code:'TIMEOUT'},504);return respond({error:'Не удалось завершить проверку. Попробуйте вставить текст условий.',code:'ANALYSIS_FAILED'},502);}
+    }catch(error){if(error instanceof PublicError)return respond({error:error.message,code:error.code},error.status);if(['TimeoutError','AbortError'].includes(error.name))return respond({error:'Проверка заняла слишком много времени. Попробуйте сократить текст или повторить позже.',code:'TIMEOUT'},504);try{let d=`${error?.name||'Error'}: ${error?.message||error}${error?.cause?` | cause: ${error.cause.code||''} ${error.cause.message||error.cause}`:''}`;for(const secret of [env.OPENROUTER_API_KEY,env.PROTOTYPE_ACCESS_CODE])if(secret)d=d.split(secret).join('[redacted]');report('ANALYSIS_FAILED '+d.slice(0,800));}catch{/* logging must never break the response */}return respond({error:'Не удалось завершить проверку. Попробуйте вставить текст условий.',code:'ANALYSIS_FAILED'},502);}
   };
 }

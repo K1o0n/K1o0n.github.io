@@ -22,7 +22,8 @@ export function safeURL(value) {
 export async function resolvePublic(host, resolver=lookup) {
   const addresses=await resolver(host,{all:true,verbatim:true});
   if (!addresses.length || addresses.some(a=>!publicIP(a.address))) throw new PublicError('Эта ссылка ведёт на непубличный адрес.');
-  return addresses[0];
+  // Prefer IPv4: serverless runtimes often have no IPv6 egress.
+  return addresses.find(a=>a.family===4)||addresses[0];
 }
 // Pin the already-validated DNS answer to the TLS connection. This prevents DNS
 // rebinding between validation and connection; TLS still checks the URL hostname.
@@ -46,7 +47,7 @@ export async function readPage(url, {signal, resolver=lookup, transport=https.ge
           try {resolve({html:new TextDecoder(charset).decode(Buffer.concat(chunks)),status});} catch {reject(new PublicError('Не удалось прочитать кодировку. Вставьте текст условий.',422,'PAGE_UNAVAILABLE'));}
         });
       });
-      req.setTimeout(9000,()=>req.destroy(new PublicError('Страница долго отвечает. Попробуйте вставить текст условий.',422,'PAGE_TIMEOUT')));req.on('error',reject);
+      req.setTimeout(9000,()=>req.destroy(new PublicError('Страница долго отвечает. Попробуйте вставить текст условий.',422,'PAGE_TIMEOUT')));req.on('error',e=>reject(e instanceof PublicError||['AbortError','TimeoutError'].includes(e?.name)?e:new PublicError('Не удалось открыть страницу. Вставьте текст условий.',422,'PAGE_UNAVAILABLE')));
     });
     if(result.location) {u=safeURL(new URL(result.location,u).href);continue;}
     if(result.html!==undefined)return {...extractPage(result.html,u.href),url:u.href};
